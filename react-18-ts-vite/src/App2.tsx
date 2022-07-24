@@ -1,5 +1,10 @@
-import React, { useState, startTransition, useTransition } from 'react'
-import { flushSync } from 'react-dom' // Note: react-dom, not react
+import React, {
+  useState,
+  Suspense,
+  startTransition,
+  useTransition,
+} from 'react'
+// import { flushSync } from 'react-dom' // Note: react-dom, not react
 import logo from './logo.svg'
 import './App.css'
 
@@ -19,8 +24,11 @@ function App() {
           // updateNum(num + 1)
         }}
       />
-
-      <BusyChild num={num} />
+      <Suspense fallback={<div>loading...</div>}>
+        <div style={{ color: isPending ? 'red' : '#000' }}>
+          <BusyChild num={num} />
+        </div>
+      </Suspense>
     </div>
   )
 }
@@ -29,7 +37,6 @@ function App() {
 
 const BusyChild = React.memo(({ num }: { num: number }) => {
   console.log('BusyChild view')
-
   const cur = performance.now()
   // 增加render的耗时 时间越大，卡顿效果越明显
   while (performance.now() - cur < 100) {}

@@ -4,14 +4,25 @@ import './App.css'
 
 function App() {
   const [count, setCount] = useState(0)
+  const [flag, setFlag] = useState(false)
+  function handleClick() {
+    // setTimeout(() => {
+    // React 16 and later versions does batch these.
+    setCount((c) => c + 1)
+    setFlag((f) => !f)
 
+    // React will rerender once at the end (that's batching!)
+    // })
+  }
+
+  console.log('react')
   return (
     <div className="App">
       <header className="App-header">
         <img src={logo} className="App-logo" alt="logo" />
-        <p>Hello Vite + React 18 + Typescript</p>
+        <p>Hello Vite + React 16 + Typescript</p>
         <p>
-          <button type="button" onClick={() => setCount((count) => count + 1)}>
+          <button type="button" onClick={() => handleClick()}>
             count is: {count}
           </button>
         </p>
