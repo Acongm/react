@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "yarn dev-18 & yarn dev-17 & yarn dev-16",
+    "dev-18": "cd react-18-ts-vite && yarn dev",
+    "dev-17": "cd react-17-ts-vite && yarn dev",
+    "dev-16": "cd react-16-ts-vite && yarn dev",
+    "install-vite": "yarn install18 & yarn install17 & yarn install16",
+    "install-cra": "yarn installCRA18 & yarn installCRA17 & yarn installCRA16",
+    "install18": "cd react-18-ts-vite && yarn",
+    "install17": "cd react-17-ts-vite && yarn",
+    "install16": "cd react-16-ts-vite && yarn",
+    "installCRA18": "cd react18 && yarn",
+    "installCRA17": "cd react17 && yarn",
+    "installCRA16": "cd react16 && yarn"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
