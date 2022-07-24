@@ -22,7 +22,7 @@ function App() {
         <img src={logo} className="App-logo" alt="logo" />
         <p>Hello Vite + React 16 + Typescript</p>
         <p>
-          <button type="button" onClick={() => handleClick()}>
+          <button type="button" onClick={handleClick}>
             count is: {count}
           </button>
         </p>
