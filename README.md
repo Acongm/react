@@ -3,21 +3,20 @@
 ## React 18 带来了什么
 
 react 18 的新 API 最大的特点 就是 `Concurrent rendering` 机制。
-它使得 react 可以同时准备多个版本的 UI。
 
 ## Concurrent 的特点
 
 - startTransition: 可以让你的 UI 在一次花费高的状态转变中始终保持响应性
 - useDeferredValue: 可以让你延迟屏幕上不那么重要的部分的更新
-- <SuspenseList>: 可以让你控制 loading 状态指示器（比如转圈圈）的出现顺序
-- Streaming SSR with selective hydration: 让你的 app 可以更快地加载并可以进行交互
+- `<SuspenseList>`: 可以让你控制 loading 状态指示器（比如转圈圈）的出现顺序
+- ~~Streaming SSR with selective hydration: 让你的 app 可以更快地加载并可以进行交互~~
 
 ## 入口模式
 
 三种入口模式
-legacy 模式： ReactDOM.render(, rootNode)。没有开启新功能，这是 react17 采用的默认模式。 (会有警告提示)
-blocking 模式： ReactDOM.createBlockingRoot(rootNode).render()。作为迁移到 concurrent 模式的过渡模式。
-concurrent 模式： ReactDOM.createRoot(rootNode).render()。这个模式开启了所有的新功能。
+legacy 模式： ReactDOM.render(`<app />`, rootNode)。没有开启新功能，这是 react17 采用的默认模式。 (会有警告提示)
+~~blocking 模式： ReactDOM.createBlockingRoot(rootNode).render(`<app />`)。作为迁移到 concurrent 模式的过渡模式。~~
+concurrent 模式： ReactDOM.createRoot(rootNode).render(`<app />`)。这个模式开启了所有的新功能。
 
 ```js
 // React 17
@@ -27,6 +26,7 @@ import App from './App';
 
 const root = document.getElementById('root')!;
 ReactDOM.render(<App />, root);
+
 
 // React 18
 import React from 'react';
@@ -41,7 +41,9 @@ ReactDOM.createRoot(root).render(<App />);
 ## 异步批处理
 
 批处理是 react 将多个状态更新分组到一个渲染中以获得更好的性能。
-react18 之前只能在 react 事件处理程序中批处理更新。默认情况下，Promise、setTimeout、本机事件处理程序或任何其他事件内部的更新不会在 React 中批处理。使用自动批处理，这些更新将自动批处理：
+react18 之前只能在 react 事件处理程序中批处理更新。
+默认情况下，Promise、setTimeout、本机事件处理程序或任何其他事件内部的更新不会在 React 中批处理。
+使用自动批处理，这些更新将自动批处理：
 
 ```js
 const [count, setCount] = useState(0)
@@ -54,6 +56,8 @@ function handleClick() {
     // React will rerender once at the end (that's batching!)
   })
 }
+// react 17 render 执行次两次
+// react 18 render 执行一次
 ```
 
 那么，如果我不想要批处理呢？
@@ -78,18 +82,20 @@ function handleClick() {
 ```js
 function ensureRootIsScheduled(root, currentTime) {
   ......
-  // Determine the next lanes to work on, and their priority.
+  // 确定下一条工作路线，以及它们的优先级。
   var nextLanes = getNextLanes(root, root === workInProgressRoot ? workInProgressRootRenderLanes : NoLanes);
 
-  // This returns the priority level computed during the `getNextLanes` call.
+  // 这将返回在' getNextLanes '调用期间计算的优先级级别。
   var newCallbackPriority = returnNextLanesPriority();
 
-  // Check if there's an existing task. We may be able to reuse it.
+  // 检查是否存在现有任务。我们也许可以重新利用它。
   if (existingCallbackNode !== null) {
     var existingCallbackPriority = root.callbackPriority;
 
-    if (existingCallbackPriority === newCallbackPriority) {  // The priority hasn't changed. We can reuse the existing task. Exit.   return ; }
-    // The priority changed. Cancel the existing callback. We'll schedule a new
+    if (existingCallbackPriority === newCallbackPriority) {  // 优先级没有改变。我们可以重用现有的任务。
+       return ;
+    }
+    // 优先级发生了变化。取消现有的回调。我们会安排一个新的
     // one below.
     cancelCallback(existingCallbackNode);
   }
@@ -119,6 +125,8 @@ export function flushSync(fn) {
 }
 ```
 
+[react 源码 - flushSync](https://github.com/facebook/react/blob/main/packages/react-reconciler/src/ReactFiberWorkLoop.new.js#L1440)
+
 ## startTransition
 
 ### 概述
@@ -143,7 +151,12 @@ startTransition(() => {
 `
 ```
 
-### 伪代码
+### 浅析原理
+
+#### startTransition 伪代码
+
+标记这次 Update 为"transition"
+[react 源码 - startTransition ](https://github.com/facebook/react/packages/react/src/ReactStartTransition.js)
 
 ```js
 const ReactCurrentBatchConfig = {
@@ -160,12 +173,153 @@ export function startTransition(scope: () => void) {
 }
 ```
 
+#### dispatchSetState 伪代码
+
+根据优先级进行更新
+[react 源码 - dispatchSetState](https://github.com/facebook/react/blob/main/packages/react-reconciler/src/ReactFiberHooks.new.js#L2236)
+
+```ts
+function dispatchSetState<S, A>(
+  fiber: Fiber,
+  queue: UpdateQueue<S, A>,
+  action: A
+) {
+
+  // 获取更新的优先级
+  const lane = requestUpdateLane(fiber)
+  const update: Update<S, A> = {
+    lane,
+    action,
+    hasEagerState: false,
+    eagerState: null,
+    next: (null: any),
+  };
+  //  ...
+}
+```
+
+#### ReactFiberLane 伪代码
+
+通过 31 位的二进制来定义 31 种优先级, 数值越小优先级越大
+
+[react 源码 - ReactFiberLane ](https://github.com/facebook/react/blob/main/packages/react-reconciler/src/ReactFiberLane.new.js)
+
+```ts
+export const TotalLanes = 31
+
+export const NoLanes: Lanes = /*                        */ 0b0000000000000000000000000000000
+export const NoLane: Lane = /*                          */ 0b0000000000000000000000000000000
+
+export const SyncLane: Lane = /*                        */ 0b0000000000000000000000000000001
+
+export const InputContinuousHydrationLane: Lane = /*    */ 0b0000000000000000000000000000010
+export const InputContinuousLane: Lane = /*             */ 0b0000000000000000000000000000100
+
+export const DefaultHydrationLane: Lane = /*            */ 0b0000000000000000000000000001000
+export const DefaultLane: Lane = /*                     */ 0b0000000000000000000000000010000
+
+const TransitionHydrationLane: Lane = /*                */ 0b0000000000000000000000000100000
+const TransitionLanes: Lanes = /*                       */ 0b0000000001111111111111111000000
+const TransitionLane1: Lane = /*                        */ 0b0000000000000000000000001000000
+const TransitionLane2: Lane = /*                        */ 0b0000000000000000000000010000000
+// ....
+const TransitionLane15: Lane = /*                       */ 0b0000000000100000000000000000000
+const TransitionLane16: Lane = /*                       */ 0b0000000001000000000000000000000
+```
+
+#### requestUpdateLane 伪代码
+
+更新优先级
+(是否有 `transition update`)
+
+[react 源码 - requestUpdateLane](https://github.com/facebook/react/blob/main/packages/react-reconciler/src/ReactFiberWorkLoop.new.js#L527)
+
+```js
+export function requestUpdateLane(fiber: Fiber): Lane {
+  // Special cases
+  const mode = fiber.mode
+  // Concurrent 时, 返回最高优先级 SyncLane
+  if ((mode & ConcurrentMode) === NoMode) {
+    return (SyncLane: Lane)
+  }
+  const isTransition = requestCurrentTransition() !== NoTransition
+  if (isTransition) {
+    if (currentEventTransitionLane === NoLane) {
+      // All transitions within the same event are assigned the same lane.
+      currentEventTransitionLane = claimNextTransitionLane()
+    }
+    return currentEventTransitionLane
+  }
+}
+```
+
+#### requestCurrentTransition 伪代码
+
+返回优先级
+[react 源码 - requestCurrentTransition ](https://github.com/facebook/react/blob/main/packages/react-reconciler/src/ReactFiberTransition.js)
+
+```js
+const { ReactCurrentBatchConfig } = ReactSharedInternals
+
+export const NoTransition = null
+
+export function requestCurrentTransition(): Transition | null {
+  return ReactCurrentBatchConfig.transition
+}
+```
+
+#### claimNextTransitionLane 伪代码
+
+返回当前事件触发的标记为"transition"的 update 的优先级
+
+[react 源码 - claimNextTransitionLane](https://github.com/facebook/react/blob/main/packages/react-reconciler/src/ReactFiberLane.new.js#L493)
+
+```js
+export function claimNextTransitionLane(): Lane {
+  // Cycle through the lanes, assigning each new transition to the next lane.
+  // In most cases, this means every transition gets its own lane, until we
+  // run out of lanes and cycle back to the beginning.
+  const lane = nextTransitionLane
+  nextTransitionLane <<= 1
+  if ((nextTransitionLane & TransitionLanes) === NoLanes) {
+    nextTransitionLane = TransitionLane1
+  }
+  return lane
+}
+```
+
+#### getEventPriority 伪代码
+
+判定其他更新的优先级
+
+[react 源码 - getEventPriority](https://github.com/facebook/react/blob/main/packages/react-dom/src/events/ReactDOMEventListener.js#L410)
+
+```js
+export function getEventPriority(domEventName: DOMEventName): * {
+  switch (domEventName) {
+    // Used by SimpleEventPlugin:
+    case 'cancel':
+    case 'click':
+    case 'close':
+    case 'contextmenu':
+    case 'copy':
+    // ...
+    case 'input':
+    case 'select':
+    case 'selectstart':
+      // DiscreteEventPriority === SyncLane
+      return DiscreteEventPriority
+    // ...
+  }
+}
+```
+
 总的来说就是在执行更新前将 ReactCurrentBatchConfig 里的 transition 属性赋值为 1，标记这次 Update 为"transition"，更新结束后再将 transition 属性赋为初始值 0
 
 这里通过修改 `ReactCurrentBatchConfig.transition` 的值来做标记，
 后面在 `setState` 中， 通过 `dispatchAction` 来判断代码执行顺序的优先级。
 
-### demo
+### startTransition - demo
 
 ```js
 import React, { useState, startTransition } from 'react'
@@ -200,9 +354,11 @@ const BusyChild = React.memo(({ num }: { num: number }) => {
 })
 ```
 
+[输入渲染 3000 条数据 Demo](https://codesandbox.io/s/react-18-demo-forked-780b73?file=/src/App.js)
+
 ### useTransition
 
-一般情况下，我们可能需要通知用户后台正在工作。为此提供了一个带有 isPending 转换标志的 useTransition，React 将在状态转换期间提供视觉反馈，并在转换发生时保持浏览器响应。
+一般情况下，我们可能需要通知用户后台正在工作。为此提供了一个带有 `isPending` 转换标志的 `useTransition`，React 将在状态转换期间提供视觉反馈，并在转换发生时保持浏览器响应。
 
 ```js
 import { useTransition } from 'react'
@@ -217,15 +373,163 @@ import { useDeferredValue } from 'react'
 const deferredValue = useDeferredValue(value)
 ```
 
-### 同 `debounce` 的区别：
+用法如下：
 
-`debounce` 即 `setTimeout` 总是会有一个固定的延迟，而 useDeferredValue 的值只会在渲染耗费的时间下滞后，在性能好的机器上，延迟会变少，反之则变长。
+```jsx
+import { useDeferredValue, useState } from 'react'
+import MySlowList from '../components/MySlowList'
+
+export default function UseDeferredValuePage(props) {
+  const [text, setText] = useState('hello')
+  const deferredText = useDeferredValue(text)
+
+  const handleChange = (e) => {
+    setText(e.target.value)
+  }
+  return (
+    <div>
+      <h3>UseDeferredValuePage</h3>
+      {/* 保持将当前文本传递给 input */}
+      <input value={text} onChange={handleChange} />
+      {/* 但在必要时可以将列表“延后” */}
+      <p>{deferredText}</p>
+
+      <MySlowList text={deferredText} />
+    </div>
+  )
+}
+```
+
+### useDeferredValue 与 useTransition 区别
+
+- 相同：useDeferredValue 本质上和内部实现与 useTransition 一样都是标记成了非紧急更新任务。
+- 不同：useTransition 是把更新任务变成了延迟更新任务，而 useDeferredValue 是产生一个新的值，这个值作为延时状态。
+
+### 与`setTimeout`/`debounce`异同
+
+在 startTransition 出现之前，我们可以使用 setTimeout 来实现优化。但是现在在处理上面的优化的时候，有了 startTransition 基本上可以抛弃 setTimeout 了，原因主要有以三点：
+
+首先，与 setTimeout 不同的是，startTransition 并不会延迟调度，而是会立即执行，startTransition 接收的函数是同步执行的，只是这个 update 被加了一个“transitions"的标记。而这个标记，React 内部处理更新的时候是会作为参考信息的。这就意味着，相比于 setTimeout， 把一个 update 交给 startTransition 能够更早地被处理。而在于较快的设备上，这个过度是用户感知不到的。
+
+<!-- ### 同 `debounce` 的区别：
+
+`debounce` 即 `setTimeout` 总是会有一个固定的延迟，而 useDeferredValue 的值只会在渲染耗费的时间下滞后，在性能好的机器上，延迟会变少，反之则变长。 -->
 
 ## Suspense
 
 更方便的组织并行请求和 loading 状态的代码
 
-16 就已经支持？
-18 补充了 SuspenseList
+16 就已经支持, 例如:
 
-## useId
+```js
+// This component is loaded dynamically
+const OtherComponent = React.lazy(() => import('./OtherComponent'))
+
+function MyComponent() {
+  return (
+    <React.Suspense fallback={<Spinner />}>
+      <div>
+        <OtherComponent />
+      </div>
+    </React.Suspense>
+  )
+}
+```
+
+在 react18 中, 对其进行了一些丰富的处理,
+我们可以 封装一层 `promise`，请求中，我们将 `promise` 作为异常抛出，请求完成展示结果。
+例如:
+
+```js
+function wrapPromise(promise) {
+  let status = 'pending'
+  let result
+  let suspender = promise.then(
+    (r) => {
+      status = 'success'
+      result = r
+    },
+    (e) => {
+      status = 'error'
+      result = e
+    }
+  )
+  return {
+    read() {
+      if (status === 'pending') {
+        throw suspender
+      } else if (status === 'error') {
+        throw result
+      } else if (status === 'success') {
+        return result
+      }
+    },
+  }
+}
+```
+
+此外, 还补充了 SuspenseList
+
+### SuspenseList
+
+~~` ts 下运行使用失败`~~
+
+用于控制 Suspense 组件的显示顺序。
+
+#### `revealOrder` Suspense 加载顺序
+
+- `together` 所有 Suspense 一起显示，也就是最后一个加载完了才一起显示全部
+- `forwards` 按照顺序显示 Suspense
+- `backwards` 反序显示 Suspense
+
+#### `tail`是否显示 fallback，只在 revealOrder 为 forwards 或者 backwards 时候有效
+
+- `hidden`不显示
+- `collapsed`轮到自己再显示 
+
+#### SuspenseList 示例
+
+```jsx
+import { useState, Suspense, SuspenseList } from 'react'
+import User from '../components/User'
+import Num from '../components/Num'
+import { fetchData } from '../utils'
+import ErrorBoundaryPage from './ErrorBoundaryPage'
+
+const initialResource = fetchData()
+
+export default function SuspenseListPage(props) {
+  const [resource, setResource] = useState(initialResource)
+
+  return (
+    <div>
+      <h3>SuspenseListPage</h3>
+      <SuspenseList tail="collapsed">
+        <ErrorBoundaryPage fallback={<h1>网络出错了</h1>}>
+          <Suspense fallback={<h1>loading - user</h1>}>
+            <User resource={resource} />
+          </Suspense>
+        </ErrorBoundaryPage>
+
+        <Suspense fallback={<h1>loading-num</h1>}>
+          <Num resource={resource} />
+        </Suspense>
+      </SuspenseList>
+
+      <button onClick={() => setResource(fetchData())}>refresh</button>
+    </div>
+  )
+}
+```
+
+## 其他
+
+- ~~userId~~
+- ~~useSyncExternalStore~~
+- ~~useInsertionEffect~~
+
+## 参考资料
+
+- [React 18 新特性之 startTransition](https://juejin.cn/post/7029120932086022174)
+- [React 18 concurrent mode 详细讲解](https://zhuanlan.zhihu.com/p/425011566)
+- [react18 新特性及实践总结](https://juejin.cn/post/7117512204059934733)
