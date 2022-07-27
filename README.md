@@ -125,7 +125,7 @@ export function flushSync(fn) {
 }
 ```
 
-[react 源码 - flushSync](https://github.com/facebook/react/blob/main/packages/react-reconciler/src/ReactFiberWorkLoop.new.js#L1440)
+[react 源码 - flushSync](https://github.com/facebook/react/blame/v18.2.0/packages/react-reconciler/src/ReactFiberWorkLoop.new.js#L1367)
 
 ## startTransition
 
@@ -155,8 +155,9 @@ startTransition(() => {
 
 #### startTransition 伪代码
 
-标记这次 Update 为"transition"
-[react 源码 - startTransition ](https://github.com/facebook/react/packages/react/src/ReactStartTransition.js)
+在执行更新前将 ReactCurrentBatchConfig 里的 transition 属性赋值为 1，标记这次 Update 为"transition"，更新结束后再将 transition 属性赋为初始值 0
+
+[react 源码 - startTransition ](https://github.com/facebook/react/blame/v18.2.0/packages/react/src/ReactStartTransition.js#L14)
 
 ```js
 const ReactCurrentBatchConfig = {
@@ -175,8 +176,8 @@ export function startTransition(scope: () => void) {
 
 #### dispatchSetState 伪代码
 
-根据优先级进行更新
-[react 源码 - dispatchSetState](https://github.com/facebook/react/blob/main/packages/react-reconciler/src/ReactFiberHooks.new.js#L2236)
+（更新的入口） 根据优先级进行更新
+[react 源码 - dispatchSetState](https://github.com/facebook/react/blame/v18.2.0/packages/react-reconciler/src/ReactFiberHooks.new.js#L2228)
 
 ```ts
 function dispatchSetState<S, A>(
@@ -202,7 +203,7 @@ function dispatchSetState<S, A>(
 
 通过 31 位的二进制来定义 31 种优先级, 数值越小优先级越大
 
-[react 源码 - ReactFiberLane ](https://github.com/facebook/react/blob/main/packages/react-reconciler/src/ReactFiberLane.new.js)
+[react 源码 - ReactFiberLane ](https://github.com/facebook/react/blame/v18.2.0/packages/react-reconciler/src/ReactFiberLane.new.js#L34)
 
 ```ts
 export const TotalLanes = 31
@@ -232,7 +233,7 @@ const TransitionLane16: Lane = /*                       */ 0b0000000001000000000
 更新优先级
 (是否有 `transition update`)
 
-[react 源码 - requestUpdateLane](https://github.com/facebook/react/blob/main/packages/react-reconciler/src/ReactFiberWorkLoop.new.js#L527)
+[react 源码 - requestUpdateLane](https://github.com/facebook/react/blame/v18.2.0/packages/react-reconciler/src/ReactFiberWorkLoop.new.js#L452)
 
 ```js
 export function requestUpdateLane(fiber: Fiber): Lane {
@@ -244,8 +245,10 @@ export function requestUpdateLane(fiber: Fiber): Lane {
   }
   const isTransition = requestCurrentTransition() !== NoTransition
   if (isTransition) {
+    // 确保相同的优先级在相同的事件的稳定
+    // 在第一个事件进行缓存, 确定是事件就重置缓存
     if (currentEventTransitionLane === NoLane) {
-      // All transitions within the same event are assigned the same lane.
+      // 同一个事件中的所有transition都被分配到相同的队列上。
       currentEventTransitionLane = claimNextTransitionLane()
     }
     return currentEventTransitionLane
@@ -256,7 +259,7 @@ export function requestUpdateLane(fiber: Fiber): Lane {
 #### requestCurrentTransition 伪代码
 
 返回优先级
-[react 源码 - requestCurrentTransition ](https://github.com/facebook/react/blob/main/packages/react-reconciler/src/ReactFiberTransition.js)
+[react 源码 - requestCurrentTransition ](https://github.com/facebook/react/blame/v18.2.0/packages/react-reconciler/src/ReactFiberTransition.js)
 
 ```js
 const { ReactCurrentBatchConfig } = ReactSharedInternals
@@ -272,13 +275,12 @@ export function requestCurrentTransition(): Transition | null {
 
 返回当前事件触发的标记为"transition"的 update 的优先级
 
-[react 源码 - claimNextTransitionLane](https://github.com/facebook/react/blob/main/packages/react-reconciler/src/ReactFiberLane.new.js#L493)
+[react 源码 - claimNextTransitionLane](https://github.com/facebook/react/blame/v18.2.0/packages/react-reconciler/src/ReactFiberLane.new.js#L493)
 
 ```js
 export function claimNextTransitionLane(): Lane {
-  // Cycle through the lanes, assigning each new transition to the next lane.
-  // In most cases, this means every transition gets its own lane, until we
-  // run out of lanes and cycle back to the beginning.
+  // 在执行中, 将每个新的 transition 任务分配到下一个优先级
+  // 大多数情况下, 每个过渡都有自己的优先级, 知道我们结束结束.
   const lane = nextTransitionLane
   nextTransitionLane <<= 1
   if ((nextTransitionLane & TransitionLanes) === NoLanes) {
@@ -292,7 +294,7 @@ export function claimNextTransitionLane(): Lane {
 
 判定其他更新的优先级
 
-[react 源码 - getEventPriority](https://github.com/facebook/react/blob/main/packages/react-dom/src/events/ReactDOMEventListener.js#L410)
+[react 源码 - getEventPriority](https://github.com/facebook/react/blame/v18.2.0/packages/react-dom/src/events/ReactDOMEventListener.js#L410)
 
 ```js
 export function getEventPriority(domEventName: DOMEventName): * {
@@ -319,7 +321,7 @@ export function getEventPriority(domEventName: DOMEventName): * {
 这里通过修改 `ReactCurrentBatchConfig.transition` 的值来做标记，
 后面在 `setState` 中， 通过 `dispatchAction` 来判断代码执行顺序的优先级。
 
-### startTransition - demo
+### startTransition - 实践
 
 ```js
 import React, { useState, startTransition } from 'react'
@@ -354,9 +356,9 @@ const BusyChild = React.memo(({ num }: { num: number }) => {
 })
 ```
 
-[输入渲染 3000 条数据 Demo](https://codesandbox.io/s/react-18-demo-forked-780b73?file=/src/App.js)
+[输入渲染 30000 条数据 Demo](https://codesandbox.io/s/react-18-demo-forked-780b73?file=/src/App.js)
 
-### useTransition
+### useTransition - 实践
 
 一般情况下，我们可能需要通知用户后台正在工作。为此提供了一个带有 `isPending` 转换标志的 `useTransition`，React 将在状态转换期间提供视觉反馈，并在转换发生时保持浏览器响应。
 
@@ -366,7 +368,7 @@ const [isPending, startTransition] = useTransition()
 return isPending && <Spin />
 ```
 
-### useDeferredValue
+### useDeferredValue - 实践
 
 ```js
 import { useDeferredValue } from 'react'
@@ -405,7 +407,7 @@ export default function UseDeferredValuePage(props) {
 - 相同：useDeferredValue 本质上和内部实现与 useTransition 一样都是标记成了非紧急更新任务。
 - 不同：useTransition 是把更新任务变成了延迟更新任务，而 useDeferredValue 是产生一个新的值，这个值作为延时状态。
 
-### 与`setTimeout`/`debounce`异同
+### 与`setTimeout`、`debounce`异同
 
 在 startTransition 出现之前，我们可以使用 setTimeout 来实现优化。但是现在在处理上面的优化的时候，有了 startTransition 基本上可以抛弃 setTimeout 了，原因主要有以三点：
 
@@ -415,7 +417,7 @@ export default function UseDeferredValuePage(props) {
 
 `debounce` 即 `setTimeout` 总是会有一个固定的延迟，而 useDeferredValue 的值只会在渲染耗费的时间下滞后，在性能好的机器上，延迟会变少，反之则变长。 -->
 
-## Suspense
+## Suspense - 实践
 
 更方便的组织并行请求和 loading 状态的代码
 
@@ -528,8 +530,68 @@ export default function SuspenseListPage(props) {
 - ~~useSyncExternalStore~~
 - ~~useInsertionEffect~~
 
+## 问题
+
+- 任务如何按时间片拆分、时间片间如何中断与恢复？
+- 任务是怎样设定优先级的？
+- 如何让高优先级任务后生成而先执行，低优先级任务如又何恢复？
+
+![sync VS Concurrent](https://pic3.zhimg.com/80/v2-1bd643bbc6d0e43f4dbee76ff7840e16_1440w.jpg)
+
+```js
+import React, { useState, startTransition } from 'react'
+
+function App() {
+  const [ctn, updateCtn] = useState('')
+  const upData = () => {
+    updateCtn((v) => v + 'a')
+    startTransition(() => {
+      updateCtn((v) => v + 'b')
+    })
+    updateCtn((v) => v + 'c')
+    startTransition(() => {
+      updateCtn((v) => v + 'd')
+    })
+  }
+  console.log('render', ctn)
+  // render ac
+  // render abcd
+  return (
+    <div>
+      <button onClick={upData}>upData</button>
+      <p>{ctn}</p>
+    </div>
+  )
+}
+```
+
+## 思考
+
+下面代码 `startTransition` 为什么不起作用
+
+```js
+const [ctn, updateCtn] = useState('')
+const upData = () => {
+  updateCtn((v) => v + 'a')
+  startTransition(() => {
+    flushSync(() => {
+      updateCtn((v) => v + 'b')
+      updateCtn((v) => v + 'c')
+    })
+  })
+  updateCtn((v) => v + 'd')
+  flushSync(() => {
+    updateCtn((v) => v + 'e')
+  })
+}
+console.log('render', ctn)
+// abc
+// abcde
+```
+
 ## 参考资料
 
 - [React 18 新特性之 startTransition](https://juejin.cn/post/7029120932086022174)
-- [React 18 concurrent mode 详细讲解](https://zhuanlan.zhihu.com/p/425011566)
+- [深入剖析 React Concurrent](https://zhuanlan.zhihu.com/p/60307571)
 - [react18 新特性及实践总结](https://juejin.cn/post/7117512204059934733)
+- [Sync/setTimeout/debounce/throttle/Concurrent - 性能 Demo](https://codesandbox.io/s/koyz664q35)

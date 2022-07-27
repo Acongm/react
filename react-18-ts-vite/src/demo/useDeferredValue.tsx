@@ -7,6 +7,7 @@ const MySlowList = React.memo(({ text }: { text: String }) => {
 function App() {
   const [text, setText] = useState('hello')
   const deferredText = useDeferredValue(text)
+  // console.log(deferredText);
 
   const handleChange = (e: any) => {
     setText(e.target.value)

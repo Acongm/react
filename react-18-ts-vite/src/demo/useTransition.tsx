@@ -27,9 +27,9 @@ function App() {
 
 const BusyChild = React.memo(({ num }: { num: number }) => {
   console.log('BusyChild view')
-  const cur = performance.now()
+  // const cur = performance.now()
   // 增加render的耗时 时间越大，卡顿效果越明显
-  while (performance.now() - cur < 100) {}
+  // while (performance.now() - cur < 100) {}
 
   return <div>{num}</div>
 })

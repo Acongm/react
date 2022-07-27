@@ -1,11 +1,7 @@
 import React, { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-// import App from './App'
-// import App from './demo/useTransition'
-// import App from './demo/useDeferredValue'
-import App from './demo/suspense'
-// import App from './demo/suspenseList'
+import App from './App'
 
 const rootEl = document.getElementById('root')
 if (!rootEl) {
